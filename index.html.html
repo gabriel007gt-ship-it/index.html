@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Compartilhar Localização</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; line-height: 1.5; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 20px; }
+    button { padding: 12px 18px; border: 0; border-radius: 8px; cursor: pointer; }
+    .btn { background: #1a73e8; color: #fff; }
+    .muted { color: #555; font-size: 14px; }
+    .ok { color: #0a0; }
+    .err { color: #c00; }
+  </style>
+</head>
+<body>
+  <h2>Compartilhar Localização com Consentimento</h2>
+
+  <div class="card">
+    <p class="muted">
+      Ao clicar em <strong>Permitir e Continuar</strong>, você autoriza o navegador a compartilhar sua
+      <strong>localização precisa</strong> (GPS/Wi-Fi/Rede) com o proprietário deste link, para fins de
+      acompanhamento consentido. Os dados enviados incluem latitude, longitude, precisão, data/hora,
+      IP (fornecido pelo servidor) e informações do seu navegador.
+    </p>
+
+    <p id="status" class="muted">Pronto para começar.</p>
+
+    <button id="go" class="btn">Permitir e Continuar</button>
+
+    <p class="muted" style="margin-top:12px">
+      Após o envio, você será redirecionado para a localização da <strong>Academia</strong> no Google Maps.
+    </p>
+  </div>
+
+  <script>
+    // === CONFIGURAÇÃO ===
+    const ENDPOINT = "https://script.google.com/macros/s/AKfycbxPSdASnZFetR6Kv-_9NgPsfCyXG1UO5Pb1EZXEsVlFrl7wMUjmlTn6JH6RqNrH47Hy/exec"; // <- cole a URL do Apps Script (termina com /exec)
+    const GYM_LAT = -23.5629;  // <- latitude da academia
+    const GYM_LON = -46.6544;  // <- longitude da academia
+    const MAPS_URL = `https://www.google.com/maps?q=${-15.87920},${-5231402}`;
+
+    const statusEl = document.getElementById("status");
+    const btn = document.getElementById("go");
+
+    function setStatus(msg, ok=false, err=false) {
+      statusEl.textContent = msg;
+      statusEl.className = ok ? "ok" : err ? "err" : "muted";
+    }
+
+    async function sendLog(payload) {
+      // Envia JSON via POST para seu endpoint
+      const res = await fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      return res.json().catch(() => ({}));
+    }
+
+    async function handleShare() {
+      setStatus("Solicitando permissão de localização...");
+
+      if (!("geolocation" in navigator)) {
+        setStatus("Geolocalização não é suportada neste navegador.", false, true);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        try {
+          const { latitude, longitude, accuracy } = pos.coords;
+
+          setStatus("Enviando localização com consentimento...");
+
+          // Sinalize consentimento explícito no payload
+          const payload = {
+            consent: true,
+            latitude,
+            longitude,
+            accuracy
+          };
+
+          await sendLog(payload);
+
+          setStatus("Localização registrada. Redirecionando para a academia...");
+          window.location.href = MAPS_URL; // abre o Maps na academia (ponto fixo)
+
+        } catch (e) {
+          setStatus("Falha ao enviar os dados. Você ainda pode abrir o mapa da academia.", false, true);
+          // Mesmo se falhar o log, permite seguir para o mapa fixo
+          window.location.href = MAPS_URL;
+        }
+      }, (err) => {
+        switch (err.code) {
+          case err.PERMISSION_DENIED:
+            setStatus("Permissão negada. Sem permissão não é possível compartilhar sua localização.", false, true);
+            break;
+          case err.POSITION_UNAVAILABLE:
+            setStatus("Localização indisponível no momento.", false, true);
+            break;
+          case err.TIMEOUT:
+            setStatus("Tempo esgotado ao obter a localização.", false, true);
+            break;
+          default:
+            setStatus("Erro desconhecido ao obter a localização.", false, true);
+        }
+      }, {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+      });
+    }
+
+    btn.addEventListener("click", handleShare);
+  </script>
+</body>
+</html>
